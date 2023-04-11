@@ -2,7 +2,6 @@ import os
 import sys
 
 import fire
-import gradio as gr
 import torch
 import transformers
 from peft import PeftModel
@@ -114,37 +113,6 @@ def main(
             "max_new_tokens": max_new_tokens,
         }
 
-        if stream_output:
-            # Stream the reply 1 token at a time.
-            # This is based on the trick of using 'stopping_criteria' to create an iterator,
-            # from https://github.com/oobabooga/text-generation-webui/blob/ad37f396fc8bcbab90e11ecf17c56c97bfbd4a9c/modules/text_generation.py#L216-L243.
-
-            def generate_with_callback(callback=None, **kwargs):
-                kwargs.setdefault(
-                    "stopping_criteria", transformers.StoppingCriteriaList()
-                )
-                kwargs["stopping_criteria"].append(
-                    Stream(callback_func=callback)
-                )
-                with torch.no_grad():
-                    model.generate(**kwargs)
-
-            def generate_with_streaming(**kwargs):
-                return Iteratorize(
-                    generate_with_callback, kwargs, callback=None
-                )
-
-            with generate_with_streaming(**generate_params) as generator:
-                for output in generator:
-                    # new_tokens = len(output) - len(input_ids[0])
-                    decoded_output = tokenizer.decode(output)
-
-                    if output[-1] in [tokenizer.eos_token_id]:
-                        break
-
-                    yield prompter.get_response(decoded_output)
-            return  # early return for stream_output
-
         # Without streaming
         with torch.no_grad():
             generation_output = model.generate(
@@ -156,46 +124,8 @@ def main(
             )
         s = generation_output.sequences[0]
         output = tokenizer.decode(s)
-        yield prompter.get_response(output)
+        return prompter.get_response(output)
 
-    gr.Interface(
-        fn=evaluate,
-        inputs=[
-            gr.components.Textbox(
-                lines=2,
-                label="Instruction",
-                placeholder="Tell me about alpacas.",
-            ),
-            gr.components.Textbox(lines=2, label="Input", placeholder="none"),
-            gr.components.Slider(
-                minimum=0, maximum=1, value=0.1, label="Temperature"
-            ),
-            gr.components.Slider(
-                minimum=0, maximum=1, value=0.75, label="Top p"
-            ),
-            gr.components.Slider(
-                minimum=0, maximum=100, step=1, value=40, label="Top k"
-            ),
-            gr.components.Slider(
-                minimum=1, maximum=4, step=1, value=4, label="Beams"
-            ),
-            gr.components.Slider(
-                minimum=1, maximum=2000, step=1, value=128, label="Max tokens"
-            ),
-            gr.components.Checkbox(label="Stream output"),
-        ],
-        outputs=[
-            gr.inputs.Textbox(
-                lines=5,
-                label="Output",
-            )
-        ],
-        title="🦙🌲 Alpaca-LoRA",
-        description="Alpaca-LoRA is a 7B-parameter LLaMA model finetuned to follow instructions. It is trained on the [Stanford Alpaca](https://github.com/tatsu-lab/stanford_alpaca) dataset and makes use of the Huggingface LLaMA implementation. For more information, please visit [the project's website](https://github.com/tloen/alpaca-lora).",  # noqa: E501
-    ).queue().launch(server_name="0.0.0.0", share=share_gradio)
-    # Old testing code follows.
-
-    """
     # testing code for readme
     for instruction in [
         "Tell me about alpacas.",
@@ -211,8 +141,6 @@ def main(
         print("Instruction:", instruction)
         print("Response:", evaluate(instruction))
         print()
-    """
-
 
 if __name__ == "__main__":
     fire.Fire(main)
