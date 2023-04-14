@@ -38,6 +38,20 @@ def postprocess(text):
     text = ' '.join(words)
     return text_orth.strip().strip("\n").strip('\"'), text
 
+# def postprocess(text, split_string="###"):
+#     text_orth = text.split(split_string)[0].strip("\n")
+#     text = text_orth.strip().lower()
+#     text = text.replace("-", " ")
+#     text = ''.join(c for c in text if c.isalnum() or c == "'" or c == " ")
+#     words = []
+#     for word in text.split():
+#         if word.isdigit():
+#             words.append(num2words(int(word)))
+#         else:
+#             words.append(word)
+#     text = ' '.join(words)
+#     return text_orth.strip().strip("\n").strip('\"'), text
+
 
 def main(
     load_8bit: bool = False,
@@ -151,14 +165,27 @@ def main(
             utts_ = json.load(f)
         utts.update(utts_)
 
+    # utts = {}
+    # for rank in range(4):
+    #     with open(f'/datablob/v-yuangli/SPGI/decode_whisper/decode.{rank}.json') as f:
+    #         utts_ = json.load(f)
+    #     utts.update(utts_)
+
     for _ in range(10):
+        # for k in utts:
         for k in tqdm(utts):
+            # print(utts[k]["nbest_hyp"][0].strip().lower())
             res = evaluate("Correct the spelling errors of the following sentence:", utts[k]["nbest_hyp"][0].strip().lower())
+            # res = evaluate("Correct the spelling errors of the following sentence:", utts[k]["hyp"].strip())
+            # print(res)
             result_orth, result = postprocess(res)
+            # print(result)
+            # print(result_orth)
+            # print("***************")
             utts[k]["hyp"] = result
             utts[k]["hyp_spgi"] = result_orth
         if _ == 0:
-            with open("/datablob/v-yuangli/SPGI/fix_spelling_7b_0shot_alpaca.json", "w") as output_file:
+            with open("/datablob/v-yuangli/SPGI/fix_spelling_7b_0shot_alpaca_spelling.json", "w") as output_file:
                 json.dump(utts, output_file, indent=4)
 
 if __name__ == "__main__":
